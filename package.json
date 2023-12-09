@@ -1,0 +1,28 @@
+{
+  "name": "themis_cli",
+  "version": "1.0.4",
+  "description": "Cli for Themis workflow",
+  "main": "bin/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Bart Lunenborg",
+  "license": "MIT",
+  "keywords": [
+    "themis",
+    "cli",
+    "automation"
+  ],
+  "bin": {
+    "themis": "./bin/index.js"
+  },
+  "dependencies": {
+    "boxen": "^4.2.0",
+    "chalk": "^4.1.2",
+    "yargs": "^17.7.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BartLunenborg/ThemisCli"
+  }
+}
