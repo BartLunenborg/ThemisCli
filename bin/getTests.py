@@ -127,8 +127,8 @@ def pick_course(driver, target_year, seen):
 
 
 def pick_assignment(driver, seen):
-    test_elements = driver.find_elements(By.CSS_SELECTOR, '.cfg-val a[data-path]')
-    if not test_elements or len(test_elements) < 4:
+    test_elements = driver.find_elements(By.CSS_SELECTOR, '.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]')
+    if not test_elements:
         links = driver.find_elements(By.CSS_SELECTOR, '.ass-link a.iconize.ass-submitable, .ass-link a.iconize.ass-group')
         title_href_map = {}
         for link in links:
@@ -165,8 +165,8 @@ def pick_assignment(driver, seen):
             pick_assignment(driver, seen)
 
     else:
-        file_links = driver.find_elements(By.CSS_SELECTOR, '.cfg-val a[data-path]')
-        file_title_href_map = {link.get_attribute("data-path"): link.get_attribute("href") for link in file_links if not link.get_attribute("data-path").endswith(".pdf") }
+        file_title_href_map = {link.get_attribute("data-path"):
+                               link.get_attribute("href") for link in test_elements}
 
         print("Found the following files:")
         for title, _ in file_title_href_map.items():

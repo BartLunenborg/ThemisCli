@@ -45,8 +45,8 @@ const options = yargs
     },
   })
   .command({
-    command: "test <program>",
-    describe: "Test you program against your downloaded test cases.",
+    command: "test [program]",
+    describe: "Test you program against your downloaded test cases.\nIf no program is passed it looks for 'a.out' or 'main' (in that order).",
     builder: (yargs) => {
       return yargs.positional('program', {
         describe: 'Your executable program (e.g. a.out, main)',
@@ -54,19 +54,20 @@ const options = yargs
       });
     },
     handler: (argv) => {
-        const programPath = argv.program;
-        if (!programPath) {
-            console.error('Error: Please provide your program.');
-            return;
+      let programPath = argv.program;
+      const runTestsPath = path.join(__dirname, 'runTests.sh');
+      let commandToRun = ``;
+      if (!programPath) {
+        commandToRun = `${runTestsPath}`;
+      } else {
+        commandToRun = `${runTestsPath} ${programPath}`;
+      }
+      const childProcess = spawn(commandToRun, { stdio: 'inherit', shell: true });
+      childProcess.on('close', (code) => {
+        if (code !== 0) {
+          console.error(`Error: Test execution exited with code ${code}`);
         }
-        const runTestsPath = path.join(__dirname, 'runTests.sh');
-        const commandToRun = `${runTestsPath} ${programPath}`;
-        const childProcess = spawn(commandToRun, { stdio: 'inherit', shell: true });
-        childProcess.on('close', (code) => {
-            if (code !== 0) {
-                console.error(`Error: Test execution exited with code ${code}`);
-            }
-        });
+      });
     },
   })
   .command({
