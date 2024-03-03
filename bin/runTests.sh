@@ -42,35 +42,34 @@ else
   rm -rf "$DIFFS_DIR"/*
 fi
 
-if [ -n "$(find "$TEST_DIR" -maxdepth 1 -type f -name '*.in')" ]; then
-  for infile in "$TEST_DIR"/*.in; do
-    totalTests=$((totalTests + 1))
+tests=($(find "$TEST_DIR" -maxdepth 1 -type f -name '*.in' | sort -V))
+for test in "${tests[@]}"; do
+  totalTests=$((totalTests + 1))
 
-    expected="${infile%.in}.out"
-    filename=$(basename "$infile")
-    index="${filename%.*}"
-    diff_file="$DIFFS_DIR/$index.diff"
+  expected="${test%.in}.out"
+  filename=$(basename "$test")
+  index="${filename%.*}"
+  diff_file="$DIFFS_DIR/$index.diff"
 
-    if [ ! -e "$expected" ]; then
-      echo -e "${RED}Error: Missing corresponding .out file for $infile${NC}"
-      continue
-    fi
+  if [ ! -e "$expected" ]; then
+    echo -e "${RED}Error: Missing corresponding .out file for $test${NC}"
+    continue
+  fi
 
-    start_time=$(date +%s.%N)
-    actual=$($EXECUTABLE < "$infile")
-    end_time=$(date +%s.%N)
+  start_time=$(date +%s.%N)
+  actual=$($EXECUTABLE < "$test")
+  end_time=$(date +%s.%N)
 
-    if [ "$actual" = "$(cat "$expected")" ]; then
-      passedTests=$((passedTests + 1))
-      printf -v index_formatted "%2d" "$index"
-      echo -e "Test $index_formatted: ${GREEN}Passed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
-    else
-      printf -v index_formatted "%2d" "$index"
-      echo -e "Test $index_formatted: ${RED}Failed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
-      echo -e "Input:\n$(cat "$infile")\n\nExpected:\n$(cat "$expected")\n\nActual:\n$actual" > "$diff_file"
-    fi 
-  done
-fi
+  if [ "$actual" = "$(cat "$expected")" ]; then
+    passedTests=$((passedTests + 1))
+    printf -v index_formatted "%2d" "$index"
+    echo -e "Test $index_formatted: ${GREEN}Passed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
+  else
+    printf -v index_formatted "%2d" "$index"
+    echo -e "Test $index_formatted: ${RED}Failed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
+    echo -e "Input:\n$(cat "$test")\n\nExpected:\n$(cat "$expected")\n\nActual:\n$actual" > "$diff_file"
+  fi
+done
 
 if [ "$totalTests" -eq 0 ]; then
   echo -e "No tests found in ./tests"
