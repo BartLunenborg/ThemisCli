@@ -1,6 +1,6 @@
 {
   "name": "themis_cli",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Cli for Themis workflow",
   "main": "bin/index.js",
   "scripts": {
