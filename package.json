@@ -14,7 +14,7 @@
     "automation"
   ],
   "bin": {
-    "themis": "./bin/index.js"
+    "themis": "bin/index.js"
   },
   "dependencies": {
     "boxen": "^4.2.0",
@@ -23,6 +23,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/BartLunenborg/ThemisCli"
+    "url": "git+https://github.com/BartLunenborg/ThemisCli.git"
   }
 }
