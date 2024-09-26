@@ -1,14 +1,17 @@
 # Themis CLI
-
+<!--toc:start-->
+- [Themis CLI](#themis-cli)
+  - [Installation](#installation)
+  - [Requirements](#requirements)
+  - [Features](#features)
+  - [How to get started](#how-to-get-started)
+<!--toc:end-->
 Made to work with Themis - Programming Judge of the RUG.
 
 Use this cli tool to easily batch download test cases (and only test cases) and test your program against these downloaded test cases.
 
-
 ## Installation
-
 To install themis cli globally using npm:
-
 ```
 npm install -g themis_cli
 ```
@@ -16,19 +19,21 @@ After installing, you should now be able to use themis everywhere. To check try:
 ```
 themis
 ```
-**This tool requires** you to have `python3` and `selenium` on your pc. For selenium you can simply:
-```
-pip install selenium
-```
-## Features
 
+## Requirements
+**This tool requires** you to have `python3`, `requests`, and `beautifulsoup4` on your pc. To install the `requests` and `beautifulsoup4` libraries you can simply run the command:
+```
+pip install requests beautifulsoup4
+```
+Make sure you have `python3` installed before running the above command!
+
+## Features
 - Batch download test cases
 - Run tests locally
 - Save user name
 - Save preferred year
 
 ## How to get started
-
 Although not needed, if your are downloading test cases frequently it is nice to save your user name:
 ```
 themis user <s_number>
@@ -78,6 +83,5 @@ assignmentDir
 └── testsDiffs
     └── 2.diff
 ```
-
 Where calling `themis get` from assignmentDir would have yielded the `tests` directory and `themis test` would have yielded the `testsDiffs` directory if our program passed test case 1 but not test case 2.
 Note that we can use `themis test` in this case because our program executable is called `main`.
