@@ -19,7 +19,6 @@ def error_exit(error_msg: str):
     exit(0)
 
 
-
 # Create and return a logged in Themis session
 def get_loged_in_session(username, password):
     s = requests.Session()
@@ -65,7 +64,6 @@ def get_year(session: requests.Session, seen: set[str]) -> tuple[str, set[str]]:
     years = soup.find_all('a', class_='iconize ass-group')
     years_list = [year['title'] for year in years if year['title'] not in seen]
     years = set(years_list) - seen
-    print(years_list, years)
 
     # Use a stored year if available and possible
     script_dir = os.path.dirname(os.path.abspath(__file__))
