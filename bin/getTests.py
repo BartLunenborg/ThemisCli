@@ -1,180 +1,98 @@
 import os
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 import getpass
-import sys
-import time
+import requests
+from bs4 import BeautifulSoup
+
+YEARS = [
+    "2021-2022",
+    "2022-2023",
+    "2023-2024",
+    "2024-2025",
+]
+BASE = "https://themis.housing.rug.nl"
+LOGIN = "https://themis.housing.rug.nl/log/in"
 
 
-def start_flow(username, password):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
+# Exit the program after print a message
+def error_exit(error_msg: str):
+    print(error_msg)
+    exit(0)
 
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.get("https://themis.housing.rug.nl/log/in")
 
-    username_field = driver.find_element("name", "user")
-    password_field = driver.find_element("name", "password")
-    username_field.send_keys(username)
-    password_field.send_keys(password)
-    password_field.send_keys(Keys.RETURN)
-    try:
-        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.XPATH, "//section[@id='global-motd' and contains(., 'Welcome, logged in as')]")))
+
+# Create and return a logged in Themis session
+def get_loged_in_session(username, password):
+    s = requests.Session()
+    r = s.get(LOGIN)
+    soup = BeautifulSoup(r.text, 'html.parser')
+    csrf = soup.find('input', {'name': '_csrf'})
+    payload = {
+        '_csrf': csrf['value'],
+        'user': username,
+        'password': password
+    }
+    p = s.post(LOGIN, data=payload)
+    if p.status_code == 200:
         print("Login successful!")
-    except TimeoutException:
-        print("Login failed. Please check your credentials.")
-        driver.quit()
-        sys.exit(0)
+        return s
+    else:
+        error_exit("Login failed. Please check your credentials.")
 
-    title_href_seen = {}
-    title_href_seen["/"] = "root"
 
+# From a set of years, pick the wanted year
+def pick_year(years: list[str]) -> str:
+    max = len(years)
+    for i, year in enumerate(years):
+        print(f"({i+1}) {year}")
+    print(f"({max+1}) Quit")
+
+    while True:
+        try:
+            user_input = int(input("Please enter the index of the year you want to pick: ")) - 1
+            if 0 <= user_input < max:
+                return years[user_input]
+            elif user_input == max:
+                error_exit("Goodbye!")
+            else:
+                print("Invalid index. Please enter a valid index.")
+        except ValueError:
+            error_exit("Invalid input. Please enter a valid index.")
+
+# Retrieve the year to use
+def get_year(session: requests.Session, seen: set[str]) -> tuple[str, set[str]]:
+    r = session.get(BASE + "/course")
+    soup = BeautifulSoup(r.text, 'html.parser')
+    years = soup.find_all('a', class_='iconize ass-group')
+    years_list = [year['title'] for year in years if year['title'] not in seen]
+    years = set(years_list) - seen
+    print(years_list, years)
+
+    # Use a stored year if available and possible
     script_dir = os.path.dirname(os.path.abspath(__file__))
     year_file = os.path.join(script_dir, "year.txt")
     if os.path.exists(year_file):
         with open(year_file, "r") as file:
-            stored_year = file.read().strip()
-            stored_year = "/" + stored_year
-            if stored_year:
-                driver.get("https://themis.housing.rug.nl/course" + stored_year)
-                title_href_seen["/2021-2022"] = "a"
-                title_href_seen["/2022-2023"] = "a"
-                title_href_seen["/2023-2024"] = "a"
-                pick_course(driver, stored_year, title_href_seen)
-    else:
-        pick_year(driver, title_href_seen)
-
-
-def pick_year(driver, seen):
-    links = driver.find_elements(By.CSS_SELECTOR, 'a.iconize.ass-group[title^="/"]')
-    title_href_map = {}
-    for link in links:
-        title = link.get_attribute("title")
-        href = link.get_attribute("href")
-        if title and href and title not in seen:
-            title_href_map[title] = href
-            seen[title] = href
-
-    index = 1
-    for title, href in title_href_map.items():
-        print(f"({index}) {title}")
-        index += 1
-
-    print(f"({index}) exit")
-
-    while True:
-        try:
-            user_input = int(input("Please enter the index of the year you want to pick: "))
-            if 1 <= user_input <= index:
-                break
+            stored_year = "/" + file.read().strip()
+            if stored_year in years:
+                return ("/course" + stored_year, seen | years | {"/course" + stored_year})
             else:
-                print("Invalid index. Please enter a valid index.")
-        except ValueError:
-            print("Invalid input. Please enter a valid index.")
+                print("Your stored year does not seem to be available on Themis :/")
+                print("You can pick one from the available year on Themis")
 
-    if user_input == index:
-        print("Goodbye!")
-        driver.quit()
-        sys.exit()
-    else:
-        chosen_year = list(title_href_map.keys())[user_input-1]
-        chosen_year_link = list(title_href_map.values())[user_input-1]
-        driver.get(chosen_year_link)
-        pick_course(driver, chosen_year, seen)
+    # Pick a year from the website
+    picked_year = pick_year(years_list)
+    return ("/course" + picked_year, seen | {"/course" + year for year in years})
 
 
-def pick_course(driver, target_year, seen):
-    section = driver.find_element(By.ID, target_year)
-    links = section.find_elements(By.CSS_SELECTOR, 'div.subsec.round.shade.ass-children ul.round li.large span.ass-link a.iconize.ass-group')
-    title_href_map = {}
-    for link in links:
-        title = link.get_attribute("title")
-        href = link.get_attribute("href")
-        if title and href and title not in seen:
-            title_href_map[title] = href
-            seen[title] = href
-
-    index = 1
-    for title, href in title_href_map.items():
-        print(f"({index}) {title}")
-        index += 1
-
-    print(f"({index}) quit")
-
-    while True:
-        try:
-            user_input = int(input("Please enter the index of the course you want to pick: "))
-            if 1 <= user_input <= index:
-                break
-            else:
-                print("Invalid index. Please enter a valid index.")
-        except ValueError:
-            print("Invalid input. Please enter a valid index.")
-
-    if user_input == index:
-        print("Goodbye!")
-        driver.quit()
-        sys.exit(0)
-    else:
-        chosen_course = list(title_href_map.values())[user_input-1]
-        driver.get(chosen_course)
-        pick_assignment(driver, seen)
-
-
-def pick_assignment(driver, seen):
-    test_elements = driver.find_elements(By.CSS_SELECTOR, '.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]')
-    if not test_elements:
-        links = driver.find_elements(By.CSS_SELECTOR, '.ass-link a.iconize.ass-submitable, .ass-link a.iconize.ass-group')
-        title_href_map = {}
-        for link in links:
-            title = link.get_attribute("title")
-            href = link.get_attribute("href")
-            if title and href and title not in seen:
-                title_href_map[title] = href
-                seen[title] = href
-
-        index = 1
-        for title, href in title_href_map.items():
-            print(f"({index}) {title}")
-            index += 1
-
-        print(f"({index}) quit")
-
-        while True:
-            try:
-                user_input = int(input("Please enter the index of the assignment you want to pick: "))
-                if 1 <= user_input <= index:
-                    break
-                else:
-                    print("Invalid index. Please enter a valid index.")
-            except ValueError:
-                print("Invalid input. Please enter a valid index.")
-
-        if user_input == index:
-            print("Goodbye!")
-            driver.quit()
-            sys.exit(0)
-        else:
-            chosen_assignment = list(title_href_map.values())[user_input-1]
-            driver.get(chosen_assignment)
-            pick_assignment(driver, seen)
-
-    else:
-        file_title_href_map = {link.get_attribute("data-path"):
-                               link.get_attribute("href") for link in test_elements}
-
+# Download (or not) the found .in and .out files
+def download_files(session: requests.Session, files):
         print("Found the following files:")
-        for title, _ in file_title_href_map.items():
-            print(title)
-
+        for file in files:
+            print(file['data-path'])
         print("What do you want to do?")
         print("(1) Download files")
         print("(2) Quit")
+
         while True:
             try:
                 user_input = int(input("Please enter the index of the option you want to pick: "))
@@ -186,27 +104,63 @@ def pick_assignment(driver, seen):
                 print("Invalid input. Please enter a valid index.")
 
         if (user_input == 2):
-            print("Goodbye!")
-            driver.quit()
-            sys.exit(0)
+            error_exit("Goodbye!")
         else:
             cd = os.getcwd()
             tests_dir = os.path.join(cd, 'tests')
             if not os.path.exists(tests_dir):
                 os.makedirs(tests_dir)
-            for title, link in file_title_href_map.items():
+            for file in files:
                 print("..", end="", flush=True)
-                driver.get(link)
-                time.sleep(0.2)
-                content = driver.find_element("tag name", "pre").text + "\n"
-                save_path = os.path.join(tests_dir, title)
-                with open(save_path, "w") as file:
-                    file.write(content)
-
+                r = session.get(BASE + file['href'])
+                save_path = os.path.join(tests_dir, file['data-path'])
+                with open(save_path, "wb") as file:
+                    file.write(r.content)
             print()
-            print("Done downloading")
-            driver.quit()
-            sys.exit(0)
+            error_exit("Done downloading")
+
+
+# Go down the options until .in and .out files are found
+def options_recurse(session: requests.Session, state: tuple[str, set[str]]):
+    r = session.get(BASE + state[0])
+    if (r.status_code) != 200:
+        error_exit("The link you tried to access did not work for some reason :/")
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    # Check for .in or .out files (EXITS THE PROGRAM)
+    if options := soup.select('.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]'):
+        download_files(session, options)
+    elif options := soup.select('div.ass-children ul li a'):  # Check for assignments
+        options_list = [option['href'] for option in options if option['href'] not in state[1]]
+        options = set(options_list)
+    elif options := soup.find_all('a', class_='iconize ass-group'):  # Check for others
+        options_list = [option['title'] for option in options if option['title'] not in state[1]]
+        options = set(options_list)
+    else:
+        error_exit("Found no more links :(")
+
+    max = len(options_list)
+    for i, option in enumerate(options_list):
+        print(f"({i+1}) {option}")
+    print(f"({max+1}) Quit")
+
+    while True:
+        try:
+            user_input = int(input("Please enter the index of the option you want to pick: ")) - 1
+            if 0 <= user_input < max:
+                choice = options_list[user_input]
+                options_recurse(session, (choice, options | state[1]))
+            elif user_input == max:
+                error_exit("Goodbye!")
+            else:
+                print("Invalid index. Please enter a valid index.")
+        except ValueError:
+            print("Invalid input. Please enter a valid index.")
+
+
+def get_tests(username: str, password: str):
+    session = get_loged_in_session(username, password)
+    options_recurse(session, get_year(session, {"/", "/course/"}))
 
 
 def get_username():
@@ -219,11 +173,10 @@ def get_username():
             if stored_username:
                 return stored_username
 
-    username = input("Enter your username: ")
-    return username
+    return input("Enter your username: ")
 
 
 if __name__ == "__main__":
     username = get_username()
     password = getpass.getpass(f"Please type the password for {username}: ")
-    start_flow(username, password)
+    get_tests(username, password)
