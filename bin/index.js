@@ -57,6 +57,12 @@ const options = yargs
         describe: 'Pass the test file as an argument to the executable\n e.g ./a.out < 1.in becomes ./a.out 1.in',
         type: 'boolean',
         default: false
+      })
+      .option('v', {
+        alias: 'verbose',
+        describe: 'If a test fails the diff will be printed',
+        type: 'boolean',
+        default: false
       });
     },
     handler: (argv) => {
@@ -68,6 +74,9 @@ const options = yargs
       }
       if (argv.noRedirect) {
         commandToRun += ` -n`;
+      }
+      if (argv.verbose) {
+        commandToRun += ` -v`;
       }
       const childProcess = spawn(commandToRun, { stdio: 'inherit', shell: true });
       childProcess.on('close', (code) => {
