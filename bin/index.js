@@ -51,16 +51,23 @@ const options = yargs
       return yargs.positional('program', {
         describe: 'Your executable program (e.g. a.out, main)',
         type: 'string',
+      })
+      .option('n', {
+        alias: 'no-redirect',
+        describe: 'Pass the test file as an argument to the executable\n e.g ./a.out < 1.in becomes ./a.out 1.in',
+        type: 'boolean',
+        default: false
       });
     },
     handler: (argv) => {
       let programPath = argv.program;
       const runTestsPath = path.join(__dirname, 'runTests.sh');
-      let commandToRun = ``;
-      if (!programPath) {
-        commandToRun = `${runTestsPath}`;
-      } else {
-        commandToRun = `${runTestsPath} ${programPath}`;
+      let commandToRun = `${runTestsPath}`;
+      if (programPath) {
+        commandToRun += ` ${programPath}`;
+      }
+      if (argv.noRedirect) {
+        commandToRun += ` -n`;
       }
       const childProcess = spawn(commandToRun, { stdio: 'inherit', shell: true });
       childProcess.on('close', (code) => {
