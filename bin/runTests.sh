@@ -68,6 +68,8 @@ else
 fi
 
 # Run the tests
+totalTests=0
+passedTests=0
 tests=($(find "$TEST_DIR" -maxdepth 1 -type f -name '*.in' | sort -V))
 for test in "${tests[@]}"; do
   totalTests=$((totalTests + 1))
