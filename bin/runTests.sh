@@ -4,8 +4,34 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[01;34m'
 NC='\033[0m'
+TEST_DIR="./tests"
+DIFFS_DIR="./tests-diffs"
 
-if [ -z "$1" ]; then
+no_redirect_flag=false
+verbose=false
+program=""
+
+# Parse command-line arguments
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -n|--no-redirect)
+      no_redirect_flag=true
+      shift
+      ;;
+    -v|--verbose)
+      verbose=true
+      shift
+      ;;
+    *)
+      # If not a flag, treat as the program name
+      program="$1"
+      shift
+      ;;
+  esac
+done
+
+# Find the executable to use
+if [ -z "$program" ]; then  # If not provided, look for a.out or main
   if [ -e "a.out" ]; then
     EXECUTABLE="./a.out"
     echo -e "${GREEN}a.out${NC} will be used for running tests."
@@ -16,32 +42,32 @@ if [ -z "$1" ]; then
     echo -e "${RED}Error: No executable provided, and 'a.out' or 'main' not found.${NC}"
     exit 1
   fi
-else
-  EXECUTABLE="./$1"
+else  # Check if the provided executable exists.
+  if [ ! -e "$program" ]; then
+    echo -e "${RED}Error: The specified program '$program' does not exist.${NC}"
+    exit 1
+  fi
+  if [[ "$program" == *.py ]]; then  # Prepend the executable with the required string
+    EXECUTABLE="python3 $program"
+  else
+    EXECUTABLE="./$program"
+  fi
 fi
 
-TEST_DIR="./tests"
-DIFFS_DIR="./testsDiffs"
-
-totalTests=0
-passedTests=0
-
-if [ ! -e "$EXECUTABLE" ]; then
-  echo -e "${RED}Error: The specified program '$EXECUTABLE' does not exist.${NC}"
-  exit 1
-fi
-
+# Ensure tests directory exists
 if [ ! -d "$TEST_DIR" ]; then
   echo -e "${RED}Error: The tests directory '$TEST_DIR' does not exist.${NC}"
   exit 1
 fi
 
+# Make a directory for the .diff files
 if [ ! -d "$DIFFS_DIR" ]; then
   mkdir -p "$DIFFS_DIR"
 else
   rm -rf "$DIFFS_DIR"/*
 fi
 
+# Run the tests
 tests=($(find "$TEST_DIR" -maxdepth 1 -type f -name '*.in' | sort -V))
 for test in "${tests[@]}"; do
   totalTests=$((totalTests + 1))
@@ -57,17 +83,24 @@ for test in "${tests[@]}"; do
   fi
 
   start_time=$(date +%s.%N)
-  actual=$($EXECUTABLE < "$test")
+  if $no_redirect_flag; then
+    actual=$($EXECUTABLE "$test")
+  else
+    actual=$($EXECUTABLE < "$test")
+  fi
   end_time=$(date +%s.%N)
 
+  if [[ "$index" =~ ^-?[0-9]+$ ]]; then
+    printf -v index_formatted "%2d" "$index"
+  else
+    printf -v index_formatted "%s"  "$index"
+  fi
   if [ "$actual" = "$(cat "$expected")" ]; then
     passedTests=$((passedTests + 1))
-    printf -v index_formatted "%2d" "$index"
     echo -e "Test $index_formatted: ${GREEN}Passed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
   else
-    printf -v index_formatted "%2d" "$index"
     echo -e "Test $index_formatted: ${RED}Failed${NC} (time taken: $(bc <<<"scale=3; $end_time - $start_time") seconds)"
-    echo -e "Input:\n$(cat "$test")\n\nExpected:\n$(cat "$expected")\n\nActual:\n$actual" > "$diff_file"
+    echo -e "INPUT:\n$(cat "$test")\n<<<<<=============>>>>>\nEXPECTED:\n$(cat "$expected")\n<<<<<=============>>>>>\nACTUAL:\n$actual" > "$diff_file"
   fi
 done
 
@@ -78,5 +111,12 @@ elif [ "$totalTests" -eq "$passedTests" ]; then
   rm -r "$DIFFS_DIR"
 else
   echo -e "There were ${RED}test failures${NC}, passed $passedTests/$totalTests tests."
-  echo -e "See the ${BLUE}testsDiffs${NC} directory for the differences in output."
+  if $verbose; then
+    for diff_file in ./tests-diffs/*.diff; do
+      echo -e "${RED}$diff_file:${NC}"
+      cat "$diff_file"
+    done
+  else
+    echo -e "See the ${BLUE}tests-diffs${NC} directory for the differences in output."
+  fi
 fi
