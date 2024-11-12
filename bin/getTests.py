@@ -1,4 +1,5 @@
 import os
+import json
 import getpass
 import requests
 from bs4 import BeautifulSoup
@@ -11,6 +12,8 @@ YEARS = [
 ]
 BASE = "https://themis.housing.rug.nl"
 LOGIN = "https://themis.housing.rug.nl/log/in"
+HOME = os.path.expanduser("~")
+CONFIG_FILE = os.path.join(HOME, ".config", "themis_cli", "config.json")
 
 
 # Exit the program after print a message
@@ -62,20 +65,17 @@ def get_year(session: requests.Session, seen: set[str]) -> tuple[str, set[str]]:
     r = session.get(BASE + "/course")
     soup = BeautifulSoup(r.text, 'html.parser')
     years = soup.find_all('a', class_='iconize ass-group')
-    years_list = [year['title'] for year in years if year['title'] not in seen]
+    years_list = list(dict.fromkeys([year['title'] for year in years if year['title'] not in seen]))
     years = set(years_list) - seen
 
     # Use a stored year if available and possible
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    year_file = os.path.join(script_dir, "year.txt")
-    if os.path.exists(year_file):
-        with open(year_file, "r") as file:
-            stored_year = "/" + file.read().strip()
-            if stored_year in years:
-                return ("/course" + stored_year, seen | years | {"/course" + stored_year})
-            else:
-                print("Your stored year does not seem to be available on Themis :/")
-                print("You can pick one from the available year on Themis")
+    with open(CONFIG_FILE, "r") as f:
+        stored_year = json.load(f)["year"]
+        if stored_year and "/" + stored_year in years:
+            return ("/course/" + stored_year, seen | years | {"/course/" + stored_year})
+        else:
+            print("Your stored year does not seem to be available on Themis :/")
+            print("You can pick one from the available year on Themis")
 
     # Pick a year from the website
     picked_year = pick_year(years_list)
@@ -161,20 +161,21 @@ def get_tests(username: str, password: str):
     options_recurse(session, get_year(session, {"/", "/course/"}))
 
 
+# Return the stored username or prompt the user
 def get_username():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    username_file_path = os.path.join(script_dir, "user.txt")
-
-    if os.path.exists(username_file_path):
-        with open(username_file_path, "r") as file:
-            stored_username = file.read().strip()
-            if stored_username:
-                return stored_username
+    with open(CONFIG_FILE, "r") as f:
+        stored_username = json.load(f)["user"]
+        if stored_username:
+            return stored_username
 
     return input("Enter your username: ")
 
 
 if __name__ == "__main__":
+    if not os.path.isfile(CONFIG_FILE):
+        error_exit(
+            "ERROR!\nThe themis_cli config file does not exist!\nPlease run `themis setup` to create one"
+        )
     username = get_username()
     password = getpass.getpass(f"Please type the password for {username}: ")
     get_tests(username, password)
