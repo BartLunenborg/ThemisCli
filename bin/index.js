@@ -105,6 +105,19 @@ const options = yargs
     },
   })
   .command({
+    command: "setup",
+    describe: "Creates the themis_cli config file, used for storing the username and academic year.",
+    handler: (argv) => {
+      const setupPath = path.join(__dirname, '..', 'scripts', 'setup.js');
+      const nodeProcess = spawn('node', [setupPath], { stdio: 'inherit' });
+      nodeProcess.on('close', (code) => {
+        if (code !== 0) {
+          console.log(`setup exited with code ${code}`);
+        }
+      });
+    }
+  })
+  .command({
     command: "info",
     describe: "Show the stored username and year.",
     handler: async () => {
