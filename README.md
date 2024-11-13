@@ -44,17 +44,23 @@ Make sure you have `python3` installed before running the above command!
 - Save preferred year
 
 ## How to get started
+After installation, a script will generate a default configuration for you.
+You can change this configuration using `themis user <s_number>` and `themis year`.
 Although not needed, if your are downloading test cases frequently it is nice to save your user name:
 ```
 themis user <s_number>
 ```
-It can also save some time to set the current academic year:
+You can change the academic year with:
 ```
 themis year
 ```
 To check your saved username and year type:
 ```
 themis info
+```
+If you ever lose you configuration file, you can generate a new one with:
+```
+themis setup
 ```
 We can start the test case downloading flow by typing:
 ```

@@ -1,4 +1,12 @@
 import os
+import json
+
+
+# Exit the program after print a message
+def error_exit(error_msg: str):
+    print(error_msg)
+    exit(0)
+
 
 OPTIONS = [
     "2021-2022",
@@ -11,14 +19,19 @@ OPTIONS = [
 
 
 def get_year():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    year_file_path = os.path.join(script_dir, "year.txt")
-    year_file = (os.path.exists(year_file_path), year_file_path)
+    home = os.path.expanduser("~")
+    config_file = os.path.join(home, ".config", "themis_cli", "config.json")
 
-    if year_file[0]:
-        with open(year_file[1], "r") as file:
-            if stored_year := file.read().strip():
-                print(f"Current year set to: {stored_year}")
+    if not os.path.isfile(config_file):
+        error_exit(
+            "ERROR!\nThe themis_cli config file does not exist!\nPlease run `themis setup` to create one"
+        )
+
+    with open(config_file, "r") as f:
+        config = json.load(f)
+
+    if config["year"]:
+        print(f"Current year set to: {config["year"]}")
 
     print("Pick a year to set Themis to:")
     for i, option in enumerate(OPTIONS):
@@ -27,14 +40,15 @@ def get_year():
     choice = input("Enter the number of your choice: ")
 
     if "1" <= choice <= "4":
-        selected_year = OPTIONS[int(choice) - 1]
-        with open(year_file[1], "w") as file:
-            file.write(selected_year)
-        print(f"Year set to: {selected_year}")
+        config["year"] = OPTIONS[int(choice) - 1]
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
+        print(f"Year set to: {config["year"]}")
     elif choice == "5":
+        config["year"] = ""
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
         print("Year is no longer set.")
-        if year_file[0]:
-            os.remove(year_file[1])
     elif choice != "6":
         print("Invalid choice. Please enter a valid option.")
 

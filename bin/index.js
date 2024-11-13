@@ -4,7 +4,8 @@ const chalk = require('chalk');
 const boxen = require("boxen");
 const { spawn } = require('child_process');
 const path = require('path')
-const fs = require('fs').promises;
+const fs = require('fs-extra')
+const os = require('os');
 
 const usage = chalk.keyword('violet')("\nUsage: themis command\n" + boxen(chalk.green("\n" + "Themis workflow cli.\n" + "Can be used for downloading tests or running tests.\n"), {padding: 1, borderColor: 'green', dimBorder: true}));
 const options = yargs
@@ -13,14 +14,31 @@ const options = yargs
     command: "user <username>",
     describe: "Set the username used for logging in.",
     handler: async (argv) => {
-      const userFilePath = path.join(__dirname, 'user.txt');
-      await fs.writeFile(userFilePath, argv.username);
-      console.log(`Username: ${argv.username} stored`);
+      const configDir = path.join(os.homedir(), '.config', 'themis_cli');
+      const configPath = path.join(configDir, 'config.json');
+      try {
+        await fs.ensureDir(configDir);
+
+        const configExists = await fs.pathExists(configPath);
+        if (!configExists) {
+          console.error(`Error: config file not found at ${configPath}, use 'themis setup' to create it.`);
+          process.exit(1);
+        }
+
+        const config = await fs.readJson(configPath);
+        config.user = argv.username;
+
+        await fs.writeJson(configPath, config, { spaces: 2 });
+        console.log(`Username: ${argv.username} stored in configuration file.`);
+      } catch (err) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
     }
   })
   .command({
     command: "year",
-    describe: "Set the year used for Themis.",
+    describe: "Set the year used for Themis (defaults to 2024-2025).",
     handler: (argv) => {
       const setYearPath = path.join(__dirname, 'setYear.py');
       const pythonProcess = spawn('python3', [setYearPath], { stdio: 'inherit'});
@@ -87,28 +105,48 @@ const options = yargs
     },
   })
   .command({
+    command: "setup",
+    describe: "Creates the themis_cli config file, used for storing the username and academic year.",
+    handler: (argv) => {
+      const setupPath = path.join(__dirname, '..', 'scripts', 'setup.js');
+      const nodeProcess = spawn('node', [setupPath], { stdio: 'inherit' });
+      nodeProcess.on('close', (code) => {
+        if (code !== 0) {
+          console.log(`setup exited with code ${code}`);
+        }
+      });
+    }
+  })
+  .command({
     command: "info",
-    describe: "Show the stored username and standard year.",
+    describe: "Show the stored username and year.",
     handler: async () => {
-      const userFilePath = path.join(__dirname, 'user.txt');
-      const yearFilePath = path.join(__dirname, 'year.txt');
+      const configDir = path.join(os.homedir(), '.config', 'themis_cli');
+      const configPath = path.join(configDir, 'config.json');
       try {
-        const [user, year] = await Promise.all([
-          fs.readFile(userFilePath, 'utf-8').catch(() => null),
-          fs.readFile(yearFilePath, 'utf-8').catch(() => null),
-        ]);
-        if (user) {
-          console.log(`Username: ${user}`);
-        } else {
-          console.log("No username stored.");
+        await fs.ensureDir(configDir);
+
+        const configExists = await fs.pathExists(configPath);
+        if (!configExists) {
+          console.error(`Error: config file not found at ${configPath}, use 'themis setup' to create it.`);
+          process.exit(1);
         }
-        if (year) {
-          console.log(`Year: ${year}`);
+
+        const config = await fs.readJson(configPath);
+        console.log('Stored information:');
+        if (config.user) {
+          console.log(`Username: ${config.user}`);
         } else {
-          console.log("No year stored.");
+          console.log(`Username: nothing stored`);
         }
-      } catch (error) {
-        console.error("Error reading files:", error.message);
+        if (config.year) {
+          console.log(`Year: ${config.year}`);
+        } else {
+          console.log(`Year: nothing stored`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
       }
     }
   })
