@@ -21,10 +21,11 @@ Use this cli tool to easily batch download test cases (and only test cases) and 
 ![test_python](./test_python_example.png)
 
 ## Installation
-To install themis cli globally using npm:
+If you use [nvm](https://github.com/nvm-sh/nvm), you can install themis cli globally using npm:
 ```
 npm install -g themis_cli
 ```
+Otherwise, you might need sudo permissions.
 After installing, you should now be able to use themis everywhere. To check try:
 ```
 themis
