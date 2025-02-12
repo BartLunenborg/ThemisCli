@@ -27,7 +27,6 @@ CONFIG_FILE = os.path.join(HOME, ".config", "themis_cli", "config.json")
 
 # Exit the program after print a message
 def error_exit(error_msg: str):
-    print("ERROR!\n")
     print(error_msg)
     exit(0)
 
@@ -71,7 +70,7 @@ def get_loged_in_session(username: str, password: str) -> requests.Session:
         session.cookies.update({c["name"]: c["value"] for c in driver.get_cookies()})
 
     except Exception as e:
-        exit(f"Error during login!\n{e}\nPlease try again!")
+        error_exit(f"Error during login!\n{e}\nPlease try again!")
     finally:
         driver.quit()
 
@@ -93,7 +92,7 @@ def pick_year(options: list[tuple[str, str]]) -> str:
             if 0 <= user_input < max:
                 return options[user_input][1]
             elif user_input == max:
-                exit("Goodbye!")
+                error_exit("Goodbye!")
             else:
                 print("Invalid index. Please enter a valid index.")
         except ValueError:
@@ -131,7 +130,7 @@ def download_files(session: requests.Session, link: str):
         '.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]'
     )
 
-    print(f"Found the following files on {link}:")
+    print(f"Found the following .in/.out files:")
     for file in files:
         print(file["data-path"])
     print("What do you want to do?")
@@ -151,7 +150,7 @@ def download_files(session: requests.Session, link: str):
             print("Invalid input. Please enter a valid index.")
 
     if user_input == 2:
-        exit("Goodbye!")
+        error_exit("Goodbye!")
     else:
         cd = os.getcwd()
         tests_dir = os.path.join(cd, "tests")
@@ -200,7 +199,7 @@ def options_recurse(session: requests.Session, link: str):
                 else:
                     options_recurse(session, NAV_API + choice[1])
             elif user_input == max:
-                exit("Goodbye!")
+                error_exit("Goodbye!")
             else:
                 print("Invalid index. Please enter a valid index.")
         except ValueError:
