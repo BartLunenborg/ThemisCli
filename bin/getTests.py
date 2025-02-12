@@ -1,8 +1,14 @@
-import os
-import json
 import getpass
-import requests
+import json
+import os
+
 from bs4 import BeautifulSoup
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 YEARS = [
     "2021-2022",
@@ -10,146 +16,191 @@ YEARS = [
     "2023-2024",
     "2024-2025",
 ]
+
 BASE = "https://themis.housing.rug.nl"
-LOGIN = "https://themis.housing.rug.nl/log/in"
+LOGIN = "https://themis.housing.rug.nl/log/in/oidc"
+NAV_API = "https://themis.housing.rug.nl/api/navigation"
+
 HOME = os.path.expanduser("~")
 CONFIG_FILE = os.path.join(HOME, ".config", "themis_cli", "config.json")
 
 
 # Exit the program after print a message
 def error_exit(error_msg: str):
+    print("ERROR!\n")
     print(error_msg)
     exit(0)
 
 
 # Create and return a logged in Themis session
-def get_loged_in_session(username, password):
-    s = requests.Session()
-    r = s.get(LOGIN)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    csrf = soup.find('input', {'name': '_csrf'})
-    payload = {
-        '_csrf': csrf['value'],
-        'user': username,
-        'password': password
-    }
-    p = s.post(LOGIN, data=payload)
-    if p.status_code == 200:
-        print("Login successful!")
-        return s
-    else:
-        error_exit("Login failed. Please check your credentials.")
+def get_loged_in_session(username: str, password: str) -> requests.Session:
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    driver = webdriver.Chrome(options=chrome_options)
+    session = requests.Session()
+
+    try:
+        driver.get(LOGIN)
+
+        # Find username and password fields and send values to the form
+        driver.find_element(By.NAME, "Ecom_User_ID").send_keys(username)
+        driver.find_element(By.NAME, "Ecom_Password").send_keys(password)
+
+        # Submit the username and password values
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Inloggen')]").click()
+
+        # Wait for the authenticator page to load
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "nffc")))
+
+        # Get authenticator code from the user and give to the page form
+        auth = input("Provide your authenticator code: ")
+        driver.find_element(By.NAME, "nffc").send_keys(auth)
+
+        # Submit the authenticator code
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]").click()
+
+        # Wait for Themis to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//section[@id='global-motd']"))
+        )
+
+        # Give the cookies from the Selenium driver to the requests session (so we can close the Selenium driver).
+        session.cookies.update({c["name"]: c["value"] for c in driver.get_cookies()})
+
+    except Exception as e:
+        exit(f"Error during login!\n{e}\nPlease try again!")
+    finally:
+        driver.quit()
+
+    return session
 
 
-# From a set of years, pick the wanted year
-def pick_year(years: list[str]) -> str:
-    max = len(years)
-    for i, year in enumerate(years):
-        print(f"({i+1}) {year}")
+# Pick the wanted year from the options
+def pick_year(options: list[tuple[str, str]]) -> str:
+    max = len(options)
+    for i, option in enumerate(options):
+        print(f"({i+1}) {option[0]}")
     print(f"({max+1}) Quit")
 
     while True:
         try:
-            user_input = int(input("Please enter the index of the year you want to pick: ")) - 1
+            user_input = (
+                int(input("Please enter the index of the year you want to pick: ")) - 1
+            )
             if 0 <= user_input < max:
-                return years[user_input]
+                return options[user_input][1]
             elif user_input == max:
-                error_exit("Goodbye!")
+                exit("Goodbye!")
             else:
                 print("Invalid index. Please enter a valid index.")
         except ValueError:
             error_exit("Invalid input. Please enter a valid index.")
 
+
 # Retrieve the year to use
-def get_year(session: requests.Session, seen: set[str]) -> tuple[str, set[str]]:
-    r = session.get(BASE + "/course")
-    soup = BeautifulSoup(r.text, 'html.parser')
-    years = soup.find_all('a', class_='iconize ass-group')
-    years_list = list(dict.fromkeys([year['title'] for year in years if year['title'] not in seen]))
-    years = set(years_list) - seen
+def get_year(session: requests.Session) -> str:
+    r = session.get(NAV_API)
+    options = [(option["title"], option["path"]) for option in json.loads(r.text)]
 
     # Use a stored year if available and possible
     with open(CONFIG_FILE, "r") as f:
         stored_year = json.load(f)["year"]
-        if stored_year and "/" + stored_year in years:
-            return ("/course/" + stored_year, seen | years | {"/course/" + stored_year})
+        if stored_year in {year for year, _ in options}:
+            return NAV_API + "/" + stored_year
         else:
             print("Your stored year does not seem to be available on Themis :/")
             print("You can pick one from the available year on Themis")
 
-    # Pick a year from the website
-    picked_year = pick_year(years_list)
-    return ("/course" + picked_year, seen | {"/course" + year for year in years})
+    # Pick a year from the website's options
+    picked_year = pick_year(options)
+    return NAV_API + picked_year
 
 
 # Download (or not) the found .in and .out files
-def download_files(session: requests.Session, files):
-        print("Found the following files:")
-        for file in files:
-            print(file['data-path'])
-        print("What do you want to do?")
-        print("(1) Download files")
-        print("(2) Quit")
+def download_files(session: requests.Session, link: str):
+    r = session.get(link)
 
-        while True:
-            try:
-                user_input = int(input("Please enter the index of the option you want to pick: "))
-                if 1 <= user_input <= 2:
-                    break
-                else:
-                    print("Invalid index. Please enter a valid index.")
-            except ValueError:
-                print("Invalid input. Please enter a valid index.")
-
-        if (user_input == 2):
-            error_exit("Goodbye!")
-        else:
-            cd = os.getcwd()
-            tests_dir = os.path.join(cd, 'tests')
-            if not os.path.exists(tests_dir):
-                os.makedirs(tests_dir)
-            for file in files:
-                print("..", end="", flush=True)
-                r = session.get(BASE + file['href'])
-                save_path = os.path.join(tests_dir, file['data-path'])
-                with open(save_path, "wb") as file:
-                    file.write(r.content)
-            print()
-            error_exit("Done downloading")
-
-
-# Go down the options until .in and .out files are found
-def options_recurse(session: requests.Session, state: tuple[str, set[str]]):
-    r = session.get(BASE + state[0])
     if (r.status_code) != 200:
         error_exit("The link you tried to access did not work for some reason :/")
-    soup = BeautifulSoup(r.text, 'html.parser')
 
-    # Check for .in or .out files (EXITS THE PROGRAM)
-    if options := soup.select('.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]'):
-        download_files(session, options)
-    elif options := soup.select('div.ass-children ul li a'):  # Check for assignments
-        options_list = [option['href'] for option in options if option['href'] not in state[1]]
-        options = set(options_list)
-    elif options := soup.find_all('a', class_='iconize ass-group'):  # Check for others
-        options_list = [option['title'] for option in options if option['title'] not in state[1]]
-        options = set(options_list)
+    soup = BeautifulSoup(r.text, "html.parser")
+    files = soup.select(
+        '.cfg-val a[data-path][data-path$=".in"], .cfg-val a[data-path][data-path$=".out"]'
+    )
+
+    print(f"Found the following files on {link}:")
+    for file in files:
+        print(file["data-path"])
+    print("What do you want to do?")
+    print("(1) Download files")
+    print("(2) Quit")
+
+    while True:
+        try:
+            user_input = int(
+                input("Please enter the index of the option you want to pick: ")
+            )
+            if 1 <= user_input <= 2:
+                break
+            else:
+                print("Invalid index. Please enter a valid index.")
+        except ValueError:
+            print("Invalid input. Please enter a valid index.")
+
+    if user_input == 2:
+        exit("Goodbye!")
     else:
-        error_exit("Found no more links :(")
+        cd = os.getcwd()
+        tests_dir = os.path.join(cd, "tests")
+        if not os.path.exists(tests_dir):
+            os.makedirs(tests_dir)
+        for file in files:
+            print("..", end="", flush=True)
+            r = session.get(BASE + file["href"])  # type: ignore
+            save_path = os.path.join(tests_dir, file["data-path"])  # type: ignore
+            with open(save_path, "wb") as file:
+                file.write(r.content)
+        print()
+        error_exit("Done downloading")
 
-    max = len(options_list)
-    for i, option in enumerate(options_list):
-        print(f"({i+1}) {option}")
+
+# Go down the options until a link that is 'submitable' is found
+def options_recurse(session: requests.Session, link: str):
+    r = session.get(link)
+
+    if (r.status_code) != 200:
+        error_exit("The link you tried to access did not work for some reason :/")
+
+    options = [
+        (option["title"], option["path"], option["submitable"])
+        for option in json.loads(r.text)
+    ]
+
+    if len(options) == 0:
+        error_exit(f"Found no more links on page: {link} :/")
+
+    max = len(options)
+    for i, option in enumerate(options):
+        print(f"({i+1}) {option[0]}")
     print(f"({max+1}) Quit")
 
     while True:
         try:
-            user_input = int(input("Please enter the index of the option you want to pick: ")) - 1
+            user_input = (
+                int(input("Please enter the index of the option you want to pick: "))
+                - 1
+            )
             if 0 <= user_input < max:
-                choice = options_list[user_input]
-                options_recurse(session, (choice, options | state[1]))
+                choice = options[user_input]
+                if choice[2] == True:
+                    download_files(session, BASE + "/course" + choice[1])
+                else:
+                    options_recurse(session, NAV_API + choice[1])
             elif user_input == max:
-                error_exit("Goodbye!")
+                exit("Goodbye!")
             else:
                 print("Invalid index. Please enter a valid index.")
         except ValueError:
@@ -158,7 +209,7 @@ def options_recurse(session: requests.Session, state: tuple[str, set[str]]):
 
 def get_tests(username: str, password: str):
     session = get_loged_in_session(username, password)
-    options_recurse(session, get_year(session, {"/", "/course/"}))
+    options_recurse(session, get_year(session))
 
 
 # Return the stored username or prompt the user

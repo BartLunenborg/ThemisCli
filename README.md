@@ -32,9 +32,9 @@ themis
 ```
 
 ## Requirements
-**This tool requires** you to have `python3`, `requests`, and `beautifulsoup4` on your pc. To install the `requests` and `beautifulsoup4` libraries you can simply run the command:
+**This tool requires** you to have `python3`, `requests`, and `beautifulsoup4`, and `selenium` on your pc. To install the `requests`, `beautifulsoup4`, and `selenium` libraries you can simply run the command:
 ```
-pip install requests beautifulsoup4
+pip install requests beautifulsoup4 selenium
 ```
 Make sure you have `python3` installed before running the above command!
 
